@@ -48,7 +48,7 @@ assert(!W.canPlace(reloaded,4,0).ok);
 assert(F.valid(reloaded));
 
 // Workshops first need a selected free cell and a construction timer.
-const farm=F.fresh();
+const farm=F.fresh();farm.buildings.mill=false;
 const millSite=W.cells.find(c=>W.canPlaceBuilding(farm,'mill',c.c,c.r).ok);
 assert(millSite);
 const startedAt=1000;

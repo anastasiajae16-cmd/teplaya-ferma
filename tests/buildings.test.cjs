@@ -6,6 +6,7 @@ const free=(s,id)=>W.cells.find(p=>W.canPlaceBuilding(s,id,p.c,p.r).ok);
 const barnUid=W.structureById.barn.uid;
 let s=F.fresh();
 assert(s.barn);
+assert(s.buildings.mill&&s.buildings.bakery&&s.buildings.coop); // Preserve the familiar starting farm.
 assert(F.valid(s));
 assert.match(F.act(s,{type:'demolish',id:barnUid},1000),/разборка/);
 assert(!F.advance(s,10999));
@@ -20,7 +21,7 @@ for(const action of [{type:'plot',i:0,crop:'wheat'},{type:'animal',id:'hen'},{ty
  assert.equal(JSON.stringify(s),before);
 }
 assert(!W.canPlace(s,4,0).ok);
-assert.match(F.act(s,{type:'buildAt',id:'mill',c:4,r:0},11001),/амбар/i);
+assert.match(F.act(s,{type:'buildAt',id:'mill',c:4,r:0},11001),/построено/i);
 
 const site=free(s,'barn');
 assert(site);
@@ -41,17 +42,20 @@ assert.equal(s.coins,80);
 // An existing plot cannot be covered by a workshop, and one pixel-equivalent
 // occupied grid cell of a relocated building blocks the next plot.
 W.setBuildingFootprint('mill',[{c:0,r:0},{c:1,r:0}]);
+assert.match(F.act(s,{type:'demolish',id:W.structureById.mill.uid},25000),/разборка/);
+assert(F.advance(s,33000));
+assert(!s.buildings.mill);
 const mill=free(s,'mill');
 assert(mill);
 const first=JSON.stringify(s);
-assert.match(F.act(s,{type:'buildAt',id:'mill',c:s.plotCells[0].c,r:s.plotCells[0].r},25000),/грядка|пересекается/);
+assert.match(F.act(s,{type:'buildAt',id:'mill',c:s.plotCells[0].c,r:s.plotCells[0].r},34000),/грядка|пересекается/);
 assert.equal(JSON.stringify(s),first);
 s.coins=200;
-F.act(s,{type:'buildAt',id:'mill',...mill},26000);
+F.act(s,{type:'buildAt',id:'mill',...mill},35000);
 assert(s.construction.mill);
 assert(!W.canPlace(s,mill.c,mill.r).ok);
 assert(!W.canPlace(s,mill.c+1,mill.r).ok);
-assert(F.advance(s,36000));
+assert(F.advance(s,45000));
 assert(s.buildings.mill);
 assert(F.valid(s));
 

@@ -1,4 +1,4 @@
-const assert=require('node:assert/strict');const F=require('../dist/game.js'),W=require('../dist/world.js');let s=F.fresh();
+const assert=require('node:assert/strict');const F=require('../dist/game.js'),W=require('../dist/world.js');let s=F.fresh();s.buildings.mill=false;s.buildings.bakery=false;
 W.setObstacleMask(new Uint8Array(W.WIDTH*W.HEIGHT));
 const site=(state,id)=>W.cells.find(c=>W.canPlaceBuilding(state,id,c.c,c.r).ok);
 const millSite=site(s,'mill');assert(millSite);
@@ -9,7 +9,7 @@ s.inventory.egg=1;F.act(s,{type:'craft',id:'bread'},55000);assert.equal(s.invent
 let old=F.fresh();old.version=1;old.coins=193;delete old.jobs;delete old.buildings;delete old.stats;delete old.quest;delete old.inventory.bread;delete old.inventory.flour;delete old.inventory.jam;old.plots[0]={crop:'wheat',ready:999};old.inventory.milk=7;const migrated=F.migrate(old);assert(migrated);assert.equal(migrated.coins,193);assert.equal(migrated.inventory.milk,7);assert.equal(migrated.inventory.flour,0);assert.equal(migrated.plots[0].ready,999);assert.equal(old.version,1);assert(!F.migrate({...old,coins:-1}));
 s=F.fresh();F.act(s,{type:'quest'});assert.equal(s.quest,0);s.stats.harvests=2;F.act(s,{type:'quest'});assert.equal(s.coins,95);F.act(s,{type:'quest'});assert.equal(s.coins,95);
 // A long order sequence never asks for production from unbuilt buildings.
-s=F.fresh();for(let i=0;i<50;i++){for(const k in s.inventory)s.inventory[k]=100;F.act(s,{type:'order',i:i%3});assert(s.orders.every(n=>!F.recipes[n].building));assert(F.valid(s));}
+s=F.fresh();s.buildings.mill=false;s.buildings.bakery=false;for(let i=0;i<50;i++){for(const k in s.inventory)s.inventory[k]=100;F.act(s,{type:'order',i:i%3});assert(s.orders.every(n=>!F.recipes[n].building));assert(F.valid(s));}
 s.buildings.mill=true;let sawMill=false;for(let i=0;i<30;i++){for(const k in s.inventory)s.inventory[k]=100;F.act(s,{type:'order',i:i%3});sawMill ||= s.orders.includes(6);assert(!s.orders.some(n=>F.recipes[n].building==='bakery'));}assert(sawMill);
 console.log('PASS: production costs/timers/one-time collection, busy building, level gates, offline job restoration, sale, v1 migration, quest claims, eligible orders');
 // Orchard harvests have independent real-time cooldowns, including after reload.
