@@ -66,4 +66,17 @@ const migrated=F.migrate(old);
 assert(migrated&&F.valid(migrated));
 assert(migrated.barn&&migrated.buildings.mill);
 assert.equal(migrated.buildingSites.mill,null);
+// The user's simplified building rule checks ONLY the chosen grid cell.
+// Opaque terrain/roads and the tall building sprite do not block placement;
+// new garden beds still obey the strict pixel mask.
+W.setObstacleMask(new Uint8Array(W.WIDTH*W.HEIGHT).fill(255));
+const simplified=F.fresh();simplified.buildings.mill=false;
+const open=W.cells.find(p=>W.canPlaceBuilding(simplified,'mill',p.c,p.r).ok);
+assert(open,'At least one cell must be available for a building');
+assert(!W.canPlace(simplified,open.c,open.r).ok,'The same cell remains forbidden for a garden bed');
+assert.match(F.act(simplified,{type:'buildAt',id:'mill',...open}),/строительство/);
+const competing={...simplified,buildings:{...simplified.buildings,bakery:false}};
+assert.match(W.canPlaceBuilding(competing,'bakery',open.c,open.r).reason,/здание/);
+const barnCell=W.snap(W.structureById.barn.x,W.structureById.barn.y);
+assert.match(W.canPlaceBuilding(competing,'bakery',barnCell.c,barnCell.r).reason,/здание/);
 console.log('PASS: barn lock, timed demolition and reconstruction, no softlock, building footprints, v5 migration');

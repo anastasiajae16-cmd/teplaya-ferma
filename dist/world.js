@@ -84,12 +84,18 @@ function canPlaceBuilding(state,id,c,r){
  if(!initialized)return {ok:false,reason:'Карта ещё загружается'};
  if(structureActive(state,id))return {ok:false,reason:'Постройка уже существует'};
  if(id!=='barn'&&state?.barn===false)return {ok:false,reason:'Сначала восстанови амбар'};
- for(const cell of structureCells(id,c,r)){
-  if(!inBounds(cell.c,cell.r))return {ok:false,reason:'Здание выходит за границу карты'};
-  if(state.plotCells.some(p=>p.c===cell.c&&p.r===cell.r))return {ok:false,reason:'Под зданием есть грядка'};
-  if(isBlocked(state,cell.c,cell.r))return {ok:false,reason:'Здание пересекается с препятствием'};
+ // Buildings use a deliberately simple one-cell placement rule. Their tall
+ // roofs and sails do not reserve neighbouring tiles while selecting a site.
+ // Strict sprite-pixel collision remains in canPlace() for new garden beds.
+ if(state.plotCells.some(p=>p.c===c&&p.r===r))return {ok:false,reason:'В этом квадрате уже есть грядка'};
+ const sameCell=p=>{const pos=snap(p.x,p.y);return pos.c===c&&pos.r===r;};
+ for(const o of objectIds){
+  if(structureById[o.id]){
+   if(structureActive(state,o.id)&&sameCell(structurePosition(state,o.id)))return {ok:false,reason:'В этом квадрате уже стоит здание'};
+  }else if((o.animal||o.id==='hen'||!removed(state,o.uid))&&sameCell(o))return {ok:false,reason:'В этом квадрате уже есть объект'};
  }
- return {ok:true,reason:'Место свободно'};
+ for(const o of [...fenceIds,...bedIds])if(!removed(state,o.uid)&&sameCell(o))return {ok:false,reason:'В этом квадрате уже есть украшение'};
+ return {ok:true,reason:'Квадрат свободен. Можно строить'};
 }
 function canRestore(state,uid){const item=removableById[uid];if(!item)return {ok:false,reason:'Объект не найден'};
  const occupied=footprints.get(uid);if(occupied&&state.plotCells.some(p=>occupied.has(key(p.c,p.r))))return {ok:false,reason:'На этом месте уже стоит грядка'};
