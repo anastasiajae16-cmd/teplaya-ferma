@@ -62,11 +62,45 @@
       out.putImageData(data, 0, 0); frames[name] = isolated;
     }
   }
+  // Separate the original painted mill into a tower and four sails. Both
+  // layers are cut from the same atlas artwork, so rotation needs no new
+  // images, external downloads or per-frame pixel processing.
+  function maskedSprite(frame, shapes) {
+    const canvas = document.createElement('canvas');
+    canvas.width = frame.width; canvas.height = frame.height;
+    const context = canvas.getContext('2d');
+    context.drawImage(frame, 0, 0);
+    const mask = document.createElement('canvas');
+    mask.width = frame.width; mask.height = frame.height;
+    const brush = mask.getContext('2d'); brush.fillStyle = '#fff';
+    for (const shape of shapes) {
+      brush.beginPath();
+      shape.forEach(([u, v], i) => i ? brush.lineTo(u * canvas.width, v * canvas.height)
+        : brush.moveTo(u * canvas.width, v * canvas.height));
+      brush.closePath(); brush.fill();
+    }
+    context.globalCompositeOperation = 'destination-in'; context.drawImage(mask, 0, 0);
+    return canvas;
+  }
+  function prepareMill() {
+    const mill = frames.mill;
+    frames.millTower = maskedSprite(mill, [[
+      [.38,.27],[.54,.20],[.70,.28],[.75,.62],[.75,.88],
+      [.88,.98],[.10,.98],[.22,.91],[.27,.63]
+    ]]);
+    frames.millSails = maskedSprite(mill, [
+      [[.43,.38],[.34,.32],[.04,.04],[.13,.00],[.51,.34]],
+      [[.46,.37],[.51,.30],[.87,.04],[.97,.13],[.54,.44]],
+      [[.44,.41],[.36,.47],[.00,.63],[.10,.71],[.50,.45]],
+      [[.46,.41],[.53,.38],[.80,.75],[.70,.80],[.40,.44]]
+    ]);
+  }
   let terrain;
   const ready = Promise.all([
     load('assets/farm-atlas-v2.png'), load('assets/crops-atlas.png'), load('assets/terrain.png'), load('assets/soil.png')
   ]).then(([objects, crops, ground, soil]) => {
     decode(objects, 4, 3, ['apple','pear','pine','lilac','barn','mill','bakery','coop','cow','hen','fence','hay']);
+    prepareMill();
     decode(crops, 2, 2, ['wheat','carrot','corn','berry']);
     decode(soil, 1, 1, ['soil']);
     terrain = ground;
