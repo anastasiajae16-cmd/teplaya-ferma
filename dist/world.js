@@ -2,15 +2,20 @@
 'use strict';
 const WIDTH=1600,HEIGHT=1000,STEP_X=80,STEP_Y=40,HALF_W=75,HALF_H=37.5;
 const trees=[{x:250,y:310,id:'apple'},{x:390,y:265,id:'pear'},{x:535,y:220,id:'apple'},{x:215,y:450,id:'pear'},{x:355,y:405,id:'apple'},{x:500,y:360,id:'pear'}];
-const objects=[...trees.map((t,i)=>({...t,w:187,h:183,tree:i})),{id:'barn',x:810,y:310,w:270,h:246},{id:'mill',x:1080,y:412,w:218,h:277,building:'mill'},{id:'bakery',x:1260,y:570,w:242,h:223,building:'bakery'},{id:'coop',x:814,y:627,w:166,h:146},{id:'cow',x:1015,y:684,w:142,h:124,animal:'cow'},{id:'hen',x:834,y:704,w:63,h:49,animal:'hen'},{id:'hen',x:754,y:686,w:44,h:34},{id:'hen',x:800,y:737,w:46,h:35},{id:'hay',x:975,y:509,w:105,h:82},{id:'hay',x:905,y:365,w:87,h:66},{id:'lilac',x:1375,y:575,w:117,h:113},{id:'lilac',x:657,y:285,w:108,h:104},{id:'lilac',x:200,y:625,w:104,h:100},{id:'pine',x:75,y:740,w:188,h:226},{id:'pine',x:45,y:520,w:160,h:193},{id:'pine',x:1120,y:160,w:150,h:181},{id:'lilac',x:1020,y:180,w:114,h:111},{id:'lilac',x:1430,y:685,w:104,h:101},{id:'pine',x:120,y:222,w:177,h:171},{id:'pine',x:240,y:154,w:166,h:160},{id:'pine',x:1430,y:415,w:182,h:176},{id:'pine',x:1360,y:283,w:179,h:173},{id:'pine',x:1500,y:600,w:192,h:185},
- ...Array.from({length:3},(_,i)=>({id:'hay',x:1060+i*58,y:846+i*18,w:83,h:74}))];
+const objects=[...trees.map((t,i)=>({...t,w:187,h:183,tree:i})),{id:'barn',x:810,y:310,w:270,h:246},{id:'mill',x:1080,y:412,w:218,h:277,building:'mill'},{id:'bakery',x:1260,y:570,w:242,h:223,building:'bakery'},{id:'coop',x:814,y:627,w:166,h:146},
+ // Preserve these four positional IDs for existing saves, but never render
+ // or collide with the former individual animals.
+ {id:'cow',x:1015,y:684,w:142,h:124,hidden:true},{id:'hen',x:834,y:704,w:63,h:49,hidden:true},{id:'hen',x:754,y:686,w:44,h:34,hidden:true},{id:'hen',x:800,y:737,w:46,h:35,hidden:true},
+ {id:'hay',x:975,y:509,w:105,h:82},{id:'hay',x:905,y:365,w:87,h:66},{id:'lilac',x:1375,y:575,w:117,h:113},{id:'lilac',x:657,y:285,w:108,h:104},{id:'lilac',x:200,y:625,w:104,h:100},{id:'pine',x:75,y:740,w:188,h:226},{id:'pine',x:45,y:520,w:160,h:193},{id:'pine',x:1120,y:160,w:150,h:181},{id:'lilac',x:1020,y:180,w:114,h:111},{id:'lilac',x:1430,y:685,w:104,h:101},{id:'pine',x:120,y:222,w:177,h:171},{id:'pine',x:240,y:154,w:166,h:160},{id:'pine',x:1430,y:415,w:182,h:176},{id:'pine',x:1360,y:283,w:179,h:173},{id:'pine',x:1500,y:600,w:192,h:185},
+ ...Array.from({length:3},(_,i)=>({id:'hay',x:1060+i*58,y:846+i*18,w:83,h:74})),
+ {id:'cowshed',x:1020,y:684,w:188,h:174,building:'cowshed'}];
 const beds=[{x:360,y:800,w:250,h:125,color:'#f0c735'},{x:535,y:887,w:230,h:115,color:'#d8e5c4'},{x:210,y:717,w:160,h:79,color:'#d9577d'},{x:700,y:903,w:145,h:70,color:'#c63c42'}];
 const fences=[...Array.from({length:4},(_,i)=>({x:1055+i*58,y:692+i*29})),...Array.from({length:3},(_,i)=>({x:1262+i*58,y:601+i*29})),...Array.from({length:2},(_,i)=>({x:250+i*58,y:695+i*29}))];
-// IDs are positional and stable across saves. Animals are intentionally not destructible.
-const names={apple:'Яблоня',pear:'Груша',pine:'Сосна',lilac:'Куст сирени',barn:'Амбар',mill:'Мельница',bakery:'Пекарня',coop:'Курятник',hay:'Стог сена'};
-const removables=[...objects.flatMap((o,i)=>o.animal||o.id==='hen'?[]:[{...o,uid:'object-'+i,name:names[o.id],kind:o.building?'workshop':o.tree!==undefined?'orchard':['barn','coop'].includes(o.id)?'building':'decoration',maxHP:o.building?7:o.id==='barn'?7:o.id==='coop'?5:o.tree!==undefined?4:o.id==='pine'?3:o.id==='lilac'?2:1,restoreCost:o.building?0:o.tree!==undefined?30:o.id==='barn'?35:o.id==='coop'?25:o.id==='pine'?12:o.id==='lilac'?6:4}]),...fences.map((f,i)=>({...f,uid:'fence-'+i,id:'fence',name:'Забор',kind:'decoration',w:100,h:76,maxHP:2,restoreCost:5})),...beds.map((b,i)=>({...b,uid:'bed-'+i,id:'flowerbed',name:'Цветник',kind:'decoration',maxHP:2,restoreCost:8}))];
+// Positional IDs remain unchanged for legacy decorations and trees.
+const names={apple:'Яблоня',pear:'Груша',pine:'Сосна',lilac:'Куст сирени',barn:'Амбар',mill:'Мельница',bakery:'Пекарня',coop:'Курятник',cowshed:'Коровник',hay:'Стог сена'};
+const removables=[...objects.flatMap((o,i)=>o.hidden?[]:[{...o,uid:'object-'+i,name:names[o.id],kind:o.building?'workshop':o.tree!==undefined?'orchard':['barn','coop'].includes(o.id)?'building':'decoration',maxHP:o.building?7:o.id==='barn'?7:o.id==='coop'?5:o.tree!==undefined?4:o.id==='pine'?3:o.id==='lilac'?2:1,restoreCost:o.building?0:o.tree!==undefined?30:o.id==='barn'?35:o.id==='coop'?25:o.id==='pine'?12:o.id==='lilac'?6:4}]),...fences.map((f,i)=>({...f,uid:'fence-'+i,id:'fence',name:'Забор',kind:'decoration',w:100,h:76,maxHP:2,restoreCost:5})),...beds.map((b,i)=>({...b,uid:'bed-'+i,id:'flowerbed',name:'Цветник',kind:'decoration',maxHP:2,restoreCost:8}))];
 const removableById=Object.fromEntries(removables.map(o=>[o.uid,o]));
-const structureIds=['barn','mill','bakery','coop'];
+const structureIds=['barn','mill','bakery','coop','cowshed'];
 const structureById=Object.fromEntries(structureIds.map(id=>[id,removables.find(o=>o.id===id)]));
 const objectIds=objects.map((o,i)=>({...o,uid:'object-'+i}));
 const fenceIds=fences.map((f,i)=>({...f,uid:'fence-'+i}));
@@ -90,6 +95,7 @@ function canPlaceBuilding(state,id,c,r){
  if(state.plotCells.some(p=>p.c===c&&p.r===r))return {ok:false,reason:'В этом квадрате уже есть грядка'};
  const sameCell=p=>{const pos=snap(p.x,p.y);return pos.c===c&&pos.r===r;};
  for(const o of objectIds){
+  if(o.hidden)continue;
   if(structureById[o.id]){
    if(structureActive(state,o.id)&&sameCell(structurePosition(state,o.id)))return {ok:false,reason:'В этом квадрате уже стоит здание'};
   }else if((o.animal||o.id==='hen'||!removed(state,o.uid))&&sameCell(o))return {ok:false,reason:'В этом квадрате уже есть объект'};
@@ -112,11 +118,7 @@ function prepare(art){
  road([[660,0],[730,140],[770,310],[790,410],[760,490],[800,600],[870,760],[865,1000]],92);
  road([[780,445],[1000,440],[1245,525]],86);
  polygon([[1600,580],[1465,600],[1380,635],[1290,645],[1225,700],[1195,775],[1220,870],[1310,950],[1420,1000],[1600,1000]]);
- // Animals cannot be demolished, so their opaque sprite pixels stay protected.
- for(const o of objects)if(o.animal||o.id==='hen'){
-  ellipse(o.x+16,o.y-4,o.w*.32,o.w*.11);
-  ctx.drawImage(art.frames[o.id],o.x-o.w/2,o.y-o.h,o.w,o.h);
- }
+ // No standalone animals occupy cells; coop and cowshed are ordinary buildings.
  const pixels=ctx.getImageData(0,0,WIDTH,HEIGHT).data,alpha=new Uint8Array(WIDTH*HEIGHT);
  for(let i=0;i<alpha.length;i++)alpha[i]=pixels[i*4+3];
  setObstacleMask(alpha);

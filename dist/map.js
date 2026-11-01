@@ -9,65 +9,9 @@ const pointers=new Map();
 const trees=FarmWorld.trees;let spots=[];
 function diamond(x,y,w,h,fill,stroke){ctx.beginPath();ctx.moveTo(x,y-h/2);ctx.lineTo(x+w/2,y);ctx.lineTo(x,y+h/2);ctx.lineTo(x-w/2,y);ctx.closePath();ctx.fillStyle=fill;ctx.fill();if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=2;ctx.stroke();}}
 function ellipse(x,y,rx,ry,color){ctx.beginPath();ctx.ellipse(x,y,rx,ry,0,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();}
-function sprite(id,x,y,w,h,alpha=1,highlight=false,tilt=0,bob=0,breath=0){const frame=FarmArt.frames[id];if(!frame||!loaded)return;ctx.save();ctx.globalAlpha=alpha;ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';if(highlight){ctx.shadowColor='#fff5a4';ctx.shadowBlur=18;}ctx.translate(x,y);if(tilt)ctx.rotate(tilt);if(breath)ctx.scale(1+breath,1-breath*.55);ctx.drawImage(frame,-w/2,-h+bob,w,h);ctx.restore();}
+function sprite(id,x,y,w,h,alpha=1,highlight=false,tilt=0,bob=0){const frame=FarmArt.frames[id];if(!frame||!loaded)return;ctx.save();ctx.globalAlpha=alpha;ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';if(highlight){ctx.shadowColor='#fff5a4';ctx.shadowBlur=18;}ctx.translate(x,y);if(tilt)ctx.rotate(tilt);ctx.drawImage(frame,-w/2,-h+bob,w,h);ctx.restore();}
 function visible(x,y,pad=120){const scale=fit*zoom,sx=width/2+panX+(x-800)*scale,sy=height/2+panY+(y-500)*scale;return sx>=-pad*scale&&sx<=width+pad*scale&&sy>=-pad*scale&&sy<=height+pad*scale;}
 function sway(i,amount=.013){return motion?Math.sin(animationTime*.00095+i*2.37)*amount+Math.sin(animationTime*.00147+i*3.1)*amount*.26:0;}
-function animatedMill(o,highlight){
- sprite('millTower',o.x,o.y,o.w,o.h,1,highlight);
- const sail=FarmArt.frames.millSail;if(!sail)return;
- // Pivot is the exact axle of the original artwork. The original four painted
- // sails rotate as one layer; no full-screen or per-frame image processing.
- const hubX=o.x-o.w*.055,hubY=o.y-o.h*.615;
- const active=!!state.jobs.mill,angle=motion?animationTime*(active ? .00064 : .00034):0;
- ctx.save();ctx.translate(hubX,hubY);ctx.rotate(angle);
- for(let blade=0;blade<4;blade++){
-  ctx.save();ctx.rotate(blade*Math.PI/2);
-  ctx.drawImage(sail,-o.w*.445,-o.h*.385,o.w,o.h);
-  ctx.restore();
- }
- ctx.restore();
- ellipse(hubX,hubY,7.5,7.5,'#8a522b');ellipse(hubX-1,hubY-1,3.2,3.2,'#d49a52');
- if(motion&&active){for(let n=0;n<3;n++){const t=(animationTime*.001+n/3)%1;ellipse(o.x-o.w*.12+t*18,o.y-12-t*20,1.8,1.3,'rgba(247,218,150,'+(0.5*(1-t))+')');}}
-}
-function bakerySmoke(o){
- if(!motion)return;
- const working=!!state.jobs.bakery,speed=working?3400:5900;
- const chimneyX=o.x+o.w*.20,chimneyY=o.y-o.h*.82;
- for(let n=0;n<(working?6:4);n++){
-  const phase=(animationTime/speed+n/(working?6:4))%1;
-  const rise=phase*(working?82:64),drift=Math.sin(animationTime*.0009+n*2.1)*8+phase*14;
-  ctx.save();ctx.globalAlpha=(working ? .5 : .23)*Math.sin(Math.PI*phase);
-  ellipse(chimneyX+drift,chimneyY-rise,9+phase*11,7+phase*9,n%2?'#f6f4e6':'#d6d2c7');ctx.restore();
- }
- if(!working)return;
- const flicker=.72+.24*Math.sin(animationTime*.018);
- const x=o.x-o.w*.215,y=o.y-o.h*.25;
- ctx.save();ctx.beginPath();ctx.ellipse(x,y,20,11,0,0,Math.PI*2);ctx.clip();
- const glow=ctx.createRadialGradient(x,y,0,x,y,24);
- glow.addColorStop(0,'rgba(255,199,75,'+(.46*flicker)+')');glow.addColorStop(1,'rgba(255,130,30,0)');
- ctx.fillStyle=glow;ctx.fillRect(x-24,y-15,48,30);ctx.restore();
-}
-function animalPose(o,i){
- if(!motion)return {x:o.x,tilt:0,bob:0,breath:0};
- const cycle=animationTime*.001+i*1.73;
- if(o.id==='cow')return {x:o.x,tilt:Math.sin(cycle*.62)*.018,bob:Math.sin(cycle*1.18)*1.3,breath:Math.sin(cycle*1.38)*.022};
- // Different hens hop, take tiny steps and briefly lower their beaks to peck.
- const hopping=(animationTime/2400+i*.317)%1;
- const hop=hopping<.27?Math.sin(Math.PI*hopping/.27)*4.5:0;
- const peck=hopping>.55&&hopping<.79?Math.sin(Math.PI*(hopping-.55)/.24)*.15:0;
- return {x:o.x+Math.sin(cycle*.86)*3.3,tilt:Math.sin(cycle*.7)*.028-peck,bob:-hop,breath:Math.sin(cycle*2.1)*.014};
-}
-function cowTail(o,i){if(!motion||o.id!=='cow')return;
- // Attach to the rump near the source sprite's real tail, then keep the
- // movement small so the animated tuft merges with the painted tail.
- const swing=Math.sin(animationTime*.004+i*1.7)*4;
- const rootX=o.x-o.w*.375,rootY=o.y-o.h*.77;
- const tipX=o.x-o.w*.47+swing,tipY=o.y-o.h*.30;
- ctx.save();ctx.strokeStyle='#51483c';ctx.lineWidth=3.2;ctx.lineCap='round';
- ctx.beginPath();ctx.moveTo(rootX,rootY);
- ctx.bezierCurveTo(rootX-14,rootY+19,tipX-7,tipY-15,tipX,tipY);ctx.stroke();
- ellipse(tipX,tipY+2,3.6,6.5,'#34352d');ctx.restore();
-}
 function waterAndGrass(){if(!motion)return;
  ctx.save();ctx.beginPath();ctx.moveTo(1600,650);ctx.lineTo(1472,650);ctx.lineTo(1393,674);ctx.lineTo(1320,690);ctx.lineTo(1265,746);ctx.lineTo(1272,818);ctx.lineTo(1340,901);ctx.lineTo(1430,954);ctx.lineTo(1600,995);ctx.closePath();ctx.clip();
  for(let i=0;i<4;i++){const x=1360+i*62,y=740+(i%2)*80,phase=(animationTime*.00023+i*.24)%1,r=7+phase*25;ctx.beginPath();ctx.ellipse(x,y,r,r*.36,0,0,Math.PI*2);ctx.strokeStyle='rgba(242,255,224,'+(.2*(1-phase))+')';ctx.lineWidth=1.6;ctx.stroke();}
@@ -139,6 +83,7 @@ for(let i=0;i<state.plots.length;i++){
 }
 // Sort tall objects by their ground contact point for consistent overlap.
 const objects=FarmWorld.objects.map(o=>{
+ if(o.hidden)return null;
  const structure=FarmWorld.structureById[o.id];
  if(structure){if(!FarmWorld.structureActive(state,o.id))return null;return {...o,...FarmWorld.structurePosition(state,o.id)};}
  return FarmWorld.removed(state,o.uid)?null:o;
@@ -148,8 +93,8 @@ for(let i=0;i<objects.length;i++){const o=objects[i];if(!visible(o.x,o.y,Math.ma
  const constructing=buildingKey&&state.construction[buildingKey],tearing=buildingKey&&state.demolition[buildingKey];
  const progress=constructing?Math.min(1,Math.max(0,(Date.now()-constructing.started)/(constructing.ready-constructing.started))):tearing?Math.min(1,Math.max(0,(Date.now()-tearing.started)/(tearing.ready-tearing.started))):1;
  ellipse(o.x+16,o.y-4,o.w*.32,o.w*.11,'#34562f35');
- const isTree=o.tree!==undefined||o.id==='pine'||o.id==='lilac',isAnimal=o.animal||o.id==='hen';
- const pose=isAnimal?animalPose(o,i):null,tilt=isTree?sway(i,.011):pose?.tilt||0,bob=pose?.bob||0;
+ const isTree=o.tree!==undefined||o.id==='pine'||o.id==='lilac';
+ const tilt=isTree?sway(i,.011):0;
  const marked=demolishing&&(selectedTarget===o.uid||hovered===o.uid),normalHover=!demolishing&&hovered===(o.tree!==undefined?'tree-'+o.tree:o.animal||o.building||o.id);
  if(constructing){
   ctx.save();ctx.beginPath();ctx.rect(o.x-o.w/2-10,o.y-o.h*progress,o.w+20,o.h*progress+10);ctx.clip();
@@ -159,20 +104,20 @@ for(let i=0;i<objects.length;i++){const o=objects[i];if(!visible(o.x,o.y,Math.ma
   ctx.save();ctx.translate(o.x,o.y);ctx.scale(1,1-progress*.82);ctx.translate(-o.x,-o.y);
   sprite(o.id,o.x,o.y,o.w,o.h,1-progress*.65,marked||normalHover);
   ctx.restore();workClouds(o,progress,true);
- }else if(o.id==='mill'&&motion)animatedMill(o,marked||normalHover);
- else{
-  if(o.id==='cow')cowTail(o,i);
-  sprite(o.id,pose?.x??o.x,o.y,o.w,o.h,1,marked||normalHover,tilt,bob,pose?.breath||0);
-  if(o.id==='bakery')bakerySmoke(o);
- }
+ }else sprite(o.id,o.x,o.y,o.w,o.h,1,marked||normalHover,tilt);
  if(demolishing){const item=FarmWorld.removableById[o.uid];if(item&&marked)label(structure?'Разобрать · '+item.name:(state.durability[o.uid]??item.maxHP)+' / '+item.maxHP+' ♥',o.x,o.y-o.h-7,{size:11,bg:'#8d543be8'});continue;}
  if(o.tree!==undefined){if(state.orchard[o.tree]<=Date.now())bubble(o.tree%2?'🍐':'🍎',o.x,o.y-o.h+14);else label(Math.ceil((state.orchard[o.tree]-Date.now())/1000)+' с',o.x,o.y-o.h+12,{size:11,bg:'#5c783cce'});}
  if(structure){
   if(constructing||tearing)label((tearing?'Разборка':'Стройка')+' · '+Math.ceil(( (tearing||constructing).ready-Date.now())/1000)+' с',o.x,o.y+8,{bg:'#8b6245',size:12});
   else if(o.building&&state.jobs[o.building])bubble(state.jobs[o.building].ready<=Date.now()?'✓':'⏳',o.x,o.y-o.h+16);
+  else if(o.id==='coop'||o.id==='cowshed'){
+   const key=o.id==='coop'?'hen':'cow',ready=state.animals[key];
+   if(ready!==null)bubble(ready<=Date.now()?Farm.goods[Farm.animals[key].product].icon:'⏳',o.x,o.y-o.h+16);
+   else label(Farm.buildings[o.id].name,o.x,o.y+7,{size:12});
+  }
   else label(Farm.buildings[o.id].name,o.x,o.y+7,{size:12});
  }
- if(o.animal){const ready=state.animals[o.animal];bubble(ready===null?'♡':ready<=Date.now()?Farm.goods[Farm.animals[o.animal].product].icon:'⏳',o.x,o.y-o.h-10);}}
+ }
 // Existing small farm props share the same hand-painted material and lighting.
 
 particles();if(placing&&selectedCell)drawPlacement();}
@@ -187,9 +132,8 @@ function updateControls(){if(!state)return;let items;
   for(const id of FarmWorld.structureIds){
    if(!FarmWorld.structureActive(state,id))continue;
    const p=FarmWorld.structurePosition(state,id),o=FarmWorld.structureById[id];
-   items.push({key:id,x:p.x,y:p.y-o.h*.43,w:o.w*.75,h:o.h*.7,kind:id==='barn'?'inventory':'workshop',id,label:id==='barn'?'Открыть амбар':Farm.buildings[id].name});
+   items.push({key:id,x:p.x,y:p.y-o.h*.43,w:o.w*.75,h:o.h*.7,kind:id==='barn'?'inventory':id==='coop'||id==='cowshed'?'facility':'workshop',id,label:id==='barn'?'Открыть амбар':Farm.buildings[id].name});
   }
-  items.push({key:'cow',x:1015,y:641,w:132,h:92,kind:'animal',id:'cow',label:'Бурёнка: кормить или собрать молоко'},{key:'hen',x:834,y:683,w:70,h:65,kind:'animal',id:'hen',label:'Курочка: кормить или собрать яйца'});
  }
  const present=new Set(items.map(i=>'map-hit-'+i.key));for(const child of [...controls.children])if(!present.has(child.id))child.remove();
  const scale=fit*zoom;for(const item of items){let b=document.getElementById('map-hit-'+item.key);if(!b){b=document.createElement('button');b.id='map-hit-'+item.key;b.className='map-hit';controls.append(b);}b.dataset.mapAction=item.kind;b.dataset.mapId=item.id;b.setAttribute('aria-label',item.label);b.title=item.label;b.style.left=width/2+panX+(item.x-800)*scale-item.w*scale/2+'px';b.style.top=height/2+panY+(item.y-500)*scale-item.h*scale/2+'px';b.style.width=item.w*scale+'px';b.style.height=item.h*scale+'px';b.style.zIndex=Math.round(item.y);}

@@ -2,7 +2,7 @@ const assert=require('node:assert/strict');
 const W=require('../dist/world.js'),F=require('../dist/game.js');
 
 const s=F.fresh();
-assert.equal(s.version,6);
+assert.equal(s.version,7);
 assert(F.valid(s));
 assert(W.removableById['fence-0']);
 
@@ -98,11 +98,11 @@ assert.equal(orchard.inventory.apple,2);
 // Save migration preserves the former economy and gives new construction fields.
 const old=F.fresh();old.version=4;delete old.removedObjects;delete old.durability;
 const migrated=F.migrate(old);
-assert.equal(migrated.version,6);
+assert.equal(migrated.version,7);
 assert.deepEqual(migrated.removedObjects,[]);
 assert.deepEqual(migrated.durability,{});
 assert.equal(migrated.barn,true);
-assert.deepEqual(migrated.construction,{barn:null,mill:null,bakery:null,coop:null});
+assert.deepEqual(migrated.construction,{barn:null,mill:null,bakery:null,coop:null,cowshed:null});
 assert(!F.valid({...migrated,removedObjects:['unknown-item']}));
 assert(!F.valid({...migrated,durability:{'fence-0':-1}}));
 console.log('PASS: demolition, timed movable buildings, durability, safe restoration, busy workshops, orchards and v4 migration');

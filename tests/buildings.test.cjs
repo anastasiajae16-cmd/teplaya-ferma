@@ -6,7 +6,7 @@ const free=(s,id)=>W.cells.find(p=>W.canPlaceBuilding(s,id,p.c,p.r).ok);
 const barnUid=W.structureById.barn.uid;
 let s=F.fresh();
 assert(s.barn);
-assert(s.buildings.mill&&s.buildings.bakery&&s.buildings.coop); // Preserve the familiar starting farm.
+assert(s.buildings.mill&&s.buildings.bakery&&s.buildings.coop&&s.buildings.cowshed); // Preserve the familiar starting farm.
 assert(F.valid(s));
 assert.match(F.act(s,{type:'demolish',id:barnUid},1000),/разборка/);
 assert(!F.advance(s,10999));
