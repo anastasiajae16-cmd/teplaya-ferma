@@ -2,7 +2,7 @@ const assert=require('node:assert/strict');
 const W=require('../dist/world.js'),F=require('../dist/game.js');
 
 const s=F.fresh();
-assert.equal(s.version,5);
+assert.equal(s.version,6);
 assert(F.valid(s));
 assert(W.removableById['fence-0']);
 
@@ -47,24 +47,42 @@ assert(!reloaded.removedObjects.includes(fence));
 assert(!W.canPlace(reloaded,4,0).ok);
 assert(F.valid(reloaded));
 
-// Unfinished goods must never be lost by demolishing a workshop.
+// Workshops first need a selected free cell and a construction timer.
 const farm=F.fresh();
-F.act(farm,{type:'build',id:'mill'});
+const millSite=W.cells.find(c=>W.canPlaceBuilding(farm,'mill',c.c,c.r).ok);
+assert(millSite);
+const startedAt=1000;
+assert.match(F.act(farm,{type:'buildAt',id:'mill',...millSite},startedAt),/строительство/);
+assert.equal(farm.buildings.mill,false);
+assert(F.valid(farm));
+assert.equal(farm.construction.mill.ready,11000);
+assert(!W.canPlace(farm,millSite.c,millSite.r).ok);
+assert(!F.advance(farm,10999));
+assert(F.advance(farm,11000));
+assert(farm.buildings.mill);
 farm.inventory.wheat=2;
-F.act(farm,{type:'craft',id:'flour'},1000);
+F.act(farm,{type:'craft',id:'flour'},12000);
 const mill=W.removables.find(o=>o.building==='mill');
 const saved=JSON.stringify(farm);
-assert.match(F.act(farm,{type:'demolish',id:mill.uid}),/Сначала забери/);
+assert.match(F.act(farm,{type:'demolish',id:mill.uid},12001),/Сначала забери/);
 assert.equal(JSON.stringify(farm),saved);
-F.act(farm,{type:'collect',id:'mill'},21000);
-for(let i=0;i<mill.maxHP;i++)F.act(farm,{type:'demolish',id:mill.uid});
+F.act(farm,{type:'collect',id:'mill'},32000);
+assert.match(F.act(farm,{type:'demolish',id:mill.uid},33000),/разборка/);
+assert(!F.advance(farm,40999));
+assert(F.advance(farm,41000));
 assert.equal(farm.buildings.mill,false);
 assert(farm.removedObjects.includes(mill.uid));
 assert.equal(farm.jobs.mill,null);
 farm.coins=100;
-F.act(farm,{type:'restore',id:mill.uid});
+assert.match(F.act(farm,{type:'restore',id:mill.uid}),/Постройки/);
+const nextSite=W.cells.find(c=>W.canPlaceBuilding(farm,'mill',c.c,c.r).ok&&(c.c!==millSite.c||c.r!==millSite.r));
+assert(nextSite);
+F.act(farm,{type:'buildAt',id:'mill',...nextSite},42000);
+F.advance(farm,52000);
 assert(farm.buildings.mill);
-assert(!farm.removedObjects.includes(mill.uid));
+assert(farm.removedObjects.includes(mill.uid)); // The old location remains free.
+assert.deepEqual(farm.buildingSites.mill,nextSite);
+assert(!W.canPlace(farm,nextSite.c,nextSite.r).ok);
 assert(F.valid(farm));
 
 // Orchard trees can be returned, so a player cannot permanently lose fruit orders.
@@ -77,12 +95,14 @@ F.act(orchard,{type:'restore',id:fruitTree.uid});
 F.act(orchard,{type:'tree',i:0},1000);
 assert.equal(orchard.inventory.apple,2);
 
-// Save migration preserves the former economy and gives fresh durability fields.
+// Save migration preserves the former economy and gives new construction fields.
 const old=F.fresh();old.version=4;delete old.removedObjects;delete old.durability;
 const migrated=F.migrate(old);
-assert.equal(migrated.version,5);
+assert.equal(migrated.version,6);
 assert.deepEqual(migrated.removedObjects,[]);
 assert.deepEqual(migrated.durability,{});
+assert.equal(migrated.barn,true);
+assert.deepEqual(migrated.construction,{barn:null,mill:null,bakery:null,coop:null});
 assert(!F.valid({...migrated,removedObjects:['unknown-item']}));
 assert(!F.valid({...migrated,durability:{'fence-0':-1}}));
-console.log('PASS: demolition, durability persistence, safe restoration, clear tiles, busy workshops, orchards and v4 migration');
+console.log('PASS: demolition, timed movable buildings, durability, safe restoration, busy workshops, orchards and v4 migration');

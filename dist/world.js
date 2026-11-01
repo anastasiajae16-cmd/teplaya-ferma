@@ -10,6 +10,8 @@ const fences=[...Array.from({length:4},(_,i)=>({x:1055+i*58,y:692+i*29})),...Arr
 const names={apple:'Яблоня',pear:'Груша',pine:'Сосна',lilac:'Куст сирени',barn:'Амбар',mill:'Мельница',bakery:'Пекарня',coop:'Курятник',hay:'Стог сена'};
 const removables=[...objects.flatMap((o,i)=>o.animal||o.id==='hen'?[]:[{...o,uid:'object-'+i,name:names[o.id],kind:o.building?'workshop':o.tree!==undefined?'orchard':['barn','coop'].includes(o.id)?'building':'decoration',maxHP:o.building?7:o.id==='barn'?7:o.id==='coop'?5:o.tree!==undefined?4:o.id==='pine'?3:o.id==='lilac'?2:1,restoreCost:o.building?0:o.tree!==undefined?30:o.id==='barn'?35:o.id==='coop'?25:o.id==='pine'?12:o.id==='lilac'?6:4}]),...fences.map((f,i)=>({...f,uid:'fence-'+i,id:'fence',name:'Забор',kind:'decoration',w:100,h:76,maxHP:2,restoreCost:5})),...beds.map((b,i)=>({...b,uid:'bed-'+i,id:'flowerbed',name:'Цветник',kind:'decoration',maxHP:2,restoreCost:8}))];
 const removableById=Object.fromEntries(removables.map(o=>[o.uid,o]));
+const structureIds=['barn','mill','bakery','coop'];
+const structureById=Object.fromEntries(structureIds.map(id=>[id,removables.find(o=>o.id===id)]));
 const objectIds=objects.map((o,i)=>({...o,uid:'object-'+i}));
 const fenceIds=fences.map((f,i)=>({...f,uid:'fence-'+i}));
 const bedIds=beds.map((b,i)=>({...b,uid:'bed-'+i}));
@@ -19,7 +21,7 @@ function snap(x,y){const a=(x-470)/STEP_X,b=(y-510)/STEP_Y;return {c:Math.round(
 function inBounds(c,r){if(!Number.isInteger(c)||!Number.isInteger(r))return false;const p=center(c,r);return p.x-HALF_W>=0&&p.x+HALF_W<=WIDTH&&p.y-HALF_H>=0&&p.y+HALF_H<=HEIGHT;}
 const cells=[];for(let c=-30;c<=30;c++)for(let r=-30;r<=30;r++)if(inBounds(c,r))cells.push({c,r});
 const initialCells=count=>Array.from({length:count},(_,i)=>({c:i%3,r:Math.floor(i/3)}));
-let initialized=false,blocked=new Set(),footprints=new Map();
+let initialized=false,blocked=new Set(),footprints=new Map(),buildingOffsets=new Map();
 function setObstacleMask(alpha){
  if(!alpha||alpha.length!==WIDTH*HEIGHT)throw Error('Invalid world collision mask');
  blocked=new Set();footprints=new Map();
@@ -35,17 +37,63 @@ function setObstacleMask(alpha){
  initialized=true;
 }
 function setFootprint(uid,keys){if(!removableById[uid])throw Error('Unknown obstacle');footprints.set(uid,new Set(keys));}
+function setBuildingFootprint(id,offsets){if(!structureById[id])throw Error('Unknown building');buildingOffsets.set(id,offsets.map(p=>({c:p.c,r:p.r})));}
 function removed(state,uid){return !!state?.removedObjects?.includes(uid);}
-function isBlocked(state,c,r){const cell=key(c,r);if(blocked.has(cell))return true;for(const [uid,covered] of footprints)if(!removed(state,uid)&&covered.has(cell))return true;return false;}
+function structureActive(state,id){return id==='barn'?state?.barn!==false||!!state?.construction?.barn:!!state?.buildings?.[id]||!!state?.construction?.[id];}
+function structurePosition(state,id){
+ const item=structureById[id],site=state?.buildingSites?.[id];
+ return site?{...center(site.c,site.r),c:site.c,r:site.r,relocated:true}:{x:item.x,y:item.y,relocated:false};
+}
+function fallbackOffsets(id){
+ const item=structureById[id],result=[];
+ for(let c=-4;c<=4;c++)for(let r=-4;r<=4;r++){
+  const dx=(c-r)*STEP_X,dy=(c+r)*STEP_Y;
+  if(Math.abs(dx)<item.w/2+HALF_W&&dy<HALF_H+25&&dy>-(item.h+HALF_H))result.push({c,r});
+ }
+ return result;
+}
+function structureCells(id,c,r){return (buildingOffsets.get(id)||fallbackOffsets(id)).map(p=>({c:c+p.c,r:r+p.r}));}
+function dynamicOccupied(state,c,r){
+ for(const id of structureIds){
+  const site=state?.buildingSites?.[id];if(!site||!structureActive(state,id))continue;
+  if(structureCells(id,site.c,site.r).some(p=>p.c===c&&p.r===r))return true;
+ }
+ return false;
+}
+function isBlocked(state,c,r){
+ const cell=key(c,r);if(blocked.has(cell))return true;
+ for(const [uid,covered] of footprints){
+  const item=removableById[uid];
+  if(item&&structureById[item.id]){
+   if(structureActive(state,item.id)&&!state?.buildingSites?.[item.id]&&covered.has(cell))return true;
+  }else if(!removed(state,uid)&&covered.has(cell))return true;
+ }
+ return dynamicOccupied(state,c,r);
+}
 function canPlace(state,c,r){
  if(!inBounds(c,r))return {ok:false,reason:'Грядка выходит за границы карты'};
  if(!initialized)return {ok:false,reason:'Карта ещё загружается'};
+ if(state?.barn===false)return {ok:false,reason:'Без амбара нельзя ставить и засаживать грядки'};
  if((state.plotCells||[]).some(cell=>cell.c===c&&cell.r===r))return {ok:false,reason:'Здесь уже есть грядка'};
  if(isBlocked(state,c,r))return {ok:false,reason:'Место перекрыто объектом, дорогой или водой'};
  return {ok:true,reason:'Свободное место'};
 }
+function canPlaceBuilding(state,id,c,r){
+ if(!structureById[id])return {ok:false,reason:'Неизвестная постройка'};
+ if(!inBounds(c,r))return {ok:false,reason:'За границей карты'};
+ if(!initialized)return {ok:false,reason:'Карта ещё загружается'};
+ if(structureActive(state,id))return {ok:false,reason:'Постройка уже существует'};
+ if(id!=='barn'&&state?.barn===false)return {ok:false,reason:'Сначала восстанови амбар'};
+ for(const cell of structureCells(id,c,r)){
+  if(!inBounds(cell.c,cell.r))return {ok:false,reason:'Здание выходит за границу карты'};
+  if(state.plotCells.some(p=>p.c===cell.c&&p.r===cell.r))return {ok:false,reason:'Под зданием есть грядка'};
+  if(isBlocked(state,cell.c,cell.r))return {ok:false,reason:'Здание пересекается с препятствием'};
+ }
+ return {ok:true,reason:'Место свободно'};
+}
 function canRestore(state,uid){const item=removableById[uid];if(!item)return {ok:false,reason:'Объект не найден'};
  const occupied=footprints.get(uid);if(occupied&&state.plotCells.some(p=>occupied.has(key(p.c,p.r))))return {ok:false,reason:'На этом месте уже стоит грядка'};
+ if(occupied)for(const id of structureIds){const site=state?.buildingSites?.[id];if(site&&structureActive(state,id)&&structureCells(id,site.c,site.r).some(p=>occupied.has(key(p.c,p.r))))return {ok:false,reason:'Место занято новой постройкой'};}
  return {ok:true};}
 function plotPrice(state){return Math.ceil(100*Math.pow(1.1,state.plotPurchases||0)-1e-8);}
 function prepare(art){
@@ -92,7 +140,26 @@ function prepare(art){
   }
   setFootprint(item.uid,used);
  }
+ // The exact same one-pixel collision rule is applied to buildings moved to
+ // the invisible grid. Their alpha footprints are calculated once at (0, 0).
+ for(const id of structureIds){
+  const item=structureById[id],anchor=center(0,0),x0=Math.floor(anchor.x-item.w/2-22),y0=Math.floor(anchor.y-item.h-22),w=Math.ceil(item.w+44),h=Math.ceil(item.h+44);
+  const tile=document.createElement('canvas');tile.width=w;tile.height=h;
+  const tc=tile.getContext('2d',{willReadFrequently:true});tc.translate(-x0,-y0);tc.fillStyle='#000';
+  tc.beginPath();tc.ellipse(anchor.x+16,anchor.y-4,item.w*.32,item.w*.11,0,0,Math.PI*2);tc.fill();
+  tc.drawImage(art.frames[id],anchor.x-item.w/2,anchor.y-item.h,item.w,item.h);
+  const bytes=tc.getImageData(0,0,w,h).data,offsets=[];
+  for(let c=-5;c<=5;c++)for(let r=-5;r<=5;r++){
+   const p=center(c,r),left=Math.max(0,Math.floor(p.x-HALF_W-x0)),right=Math.min(w,Math.ceil(p.x+HALF_W-x0));
+   const top=Math.max(0,Math.floor(p.y-HALF_H-y0)),bottom=Math.min(h,Math.ceil(p.y+HALF_H-y0));
+   let hit=false;for(let y=top;y<bottom&&!hit;y++)for(let x=left;x<right;x++){
+    if(Math.abs(x+x0+.5-p.x)/HALF_W+Math.abs(y+y0+.5-p.y)/HALF_H<=1&&bytes[(y*w+x)*4+3]>0){hit=true;break;}
+   }
+   if(hit)offsets.push({c,r});
+  }
+  setBuildingFootprint(id,offsets);
+ }
 }
-const api={WIDTH,HEIGHT,HALF_W,HALF_H,trees,objects:objectIds,beds:bedIds,fences:fenceIds,removables,removableById,cells,center,snap,inBounds,initialCells,canPlace,canRestore,plotPrice,prepare,setObstacleMask,setFootprint,removed,get ready(){return initialized;}};
+const api={WIDTH,HEIGHT,HALF_W,HALF_H,trees,objects:objectIds,beds:bedIds,fences:fenceIds,removables,removableById,structureIds,structureById,structureActive,structurePosition,structureCells,cells,center,snap,inBounds,initialCells,canPlace,canPlaceBuilding,canRestore,plotPrice,prepare,setObstacleMask,setFootprint,setBuildingFootprint,removed,get ready(){return initialized;}};
 root.FarmWorld=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

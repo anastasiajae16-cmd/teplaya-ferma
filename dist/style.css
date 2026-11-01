@@ -24,3 +24,10 @@ body{font-family:Arial,Helvetica,sans-serif}.brand{font-family:Georgia,serif;fon
 @media(max-width:540px){#demolition-bar{left:62px;right:8px;bottom:155px;transform:none;max-width:none;width:auto;padding:7px 8px;gap:5px}#demolition-title{font-size:11px}#demolition-status{font-size:8px}#demolition-bar button{font-size:9px;padding:8px 5px}#cancel-demolition{width:21px;min-width:21px;height:21px;font-size:17px!important}.cleanup-item{font-size:11px}.cleanup-item button{font-size:9px}}
 @media(orientation:landscape) and (max-height:460px){#demolition-bar{bottom:126px;left:50%;right:auto;transform:translateX(-50%);width:450px;max-width:calc(100% - 120px);padding:7px 9px}#demolition-status{font-size:9px}#demolition-bar button{font-size:9px;padding:6px 7px}}
 dialog{overflow-y:auto;overscroll-behavior:contain}
+/* v0.9: movable, timed buildings and the essential barn. */
+.barn-warning{position:absolute;top:172px;left:98px;z-index:6;max-width:330px;border:2px solid #c77f4a;border-radius:12px;background:#fff0cbee;padding:11px 14px;color:#8b4129;box-shadow:0 3px 12px #3c361b55;font:bold 12px/1.45 Arial}
+.work-status{border:1px solid #c7ad78;background:#f2e3bb;border-radius:10px;padding:12px;color:#715635;font:12px/1.5 Arial}
+.progress-track{height:10px;border-radius:8px;margin-top:9px;background:#bb9a65;overflow:hidden;box-shadow:inset 0 1px 3px #71573577}
+.progress-track i{display:block;height:100%;background:linear-gradient(90deg,#87b949,#d2e98c);border-radius:8px;transition:width .4s linear}
+@media(max-width:540px){.barn-warning{top:118px;left:62px;right:9px;max-width:none;padding:8px 10px;font-size:10px}}
+@media(orientation:landscape) and (max-height:460px){.barn-warning{top:111px;left:300px;right:55px;padding:6px 8px;font-size:9px}}

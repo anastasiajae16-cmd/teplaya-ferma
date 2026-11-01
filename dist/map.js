@@ -1,7 +1,7 @@
 'use strict';
 (function(){
 const viewport=document.getElementById('map-viewport'),canvas=document.getElementById('farm-canvas'),ctx=canvas.getContext('2d'),controls=document.getElementById('map-controls');
-let loaded=false,state=null,width=0,height=0,dpr=1,fit=1,zoom=1,panX=0,panY=0,dirty=true,lastTime=0,initialCamera=true,dragged=false,pinchStart=0,pinchZoom=1,hovered=null,placing=false,selectedCell=null,demolishing=false,selectedTarget=null,animationTime=0,previousFrame=0;
+let loaded=false,state=null,width=0,height=0,dpr=1,fit=1,zoom=1,panX=0,panY=0,dirty=true,lastTime=0,initialCamera=true,dragged=false,pinchStart=0,placingBuilding=null,hovered=null,placing=false,selectedCell=null,demolishing=false,selectedTarget=null,animationTime=0,previousFrame=0;
 let motion=!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 try{const saved=localStorage.getItem('teplaya-ferma-motion');if(saved==='on'||saved==='off')motion=saved==='on';}catch{}
 const dust=[];
@@ -25,6 +25,20 @@ function path(points,w,color){ctx.strokeStyle=color;ctx.lineWidth=w;ctx.lineJoin
 function fenceLine(x,y,n){for(let i=0;i<n;i++)sprite('fence',x+i*58,y+i*29,100,76);}
 function bed(x,y,w,h,color){diamond(x,y,w,h,'#725332','#bba05a');for(let r=0;r<5;r++)for(let c=0;c<9;c++){const a=x+(c-4)*w*.065-(r-2)*w*.065,b=y+(c-4)*h*.06+(r-2)*h*.06;path([[a,b+2],[a,b-9]],1.5,'#4b7f26');ellipse(a-3,b-2,4,2,'#62932f');ellipse(a+3,b-4,4,2,'#7ea83a');for(let k=0;k<5;k++)ellipse(a+Math.cos(k*Math.PI*2/5)*3,b-10+Math.sin(k*Math.PI*2/5)*3,2.5,2.2,color);ellipse(a,b-10,1.5,1.5,'#f8d26a');}}
 function plant(type,x,y,ready,time,maxWidth=43,tilt=0){const frame=FarmArt.frames[type];if(!frame)return;const size=ready?1:.42+.44*Math.max(0,Math.min(1,time));const w=maxWidth*size,h=w*frame.height/frame.width;ctx.save();ctx.globalAlpha=ready?1:.94;ctx.filter=ready?'none':'saturate(.8)';ellipse(x+3,y+2,12*size,5*size,'#233f2524');ctx.translate(x,y);ctx.rotate(tilt);ctx.drawImage(frame,-w/2,-h,w,h);ctx.restore();}
+function workClouds(o,progress,breaking){
+ if(!motion)return;
+ ctx.save();for(let j=0;j<7;j++){
+  const drift=Math.sin(animationTime*.002+j*1.7)*9,rise=((animationTime*.018+j*19)%68);
+  ctx.globalAlpha=(breaking?.36:.23)*(1-rise/90);
+  ellipse(o.x+(j-3)*o.w*.095+drift,o.y-rise-8,9+j%3*4,6+j%2*4,breaking?'#cab597':'#ead5b1');
+ }
+ if(!breaking){
+  ctx.globalAlpha=.85;ctx.strokeStyle='#c8a36d';ctx.lineWidth=5;
+  for(let i=-1;i<=1;i++){const x=o.x+i*o.w*.26;path([[x,o.y],[x,o.y-o.h*.9]],4,'#b3814c');}
+  path([[o.x-o.w*.37,o.y-o.h*.32],[o.x+o.w*.37,o.y-o.h*.32]],3,'#dfbb77');
+ }
+ ctx.restore();
+}
 function draw(){if(!state||!width||!loaded)return;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#78a33b';ctx.fillRect(0,0,width,height);const scale=fit*zoom;ctx.translate(width/2+panX,height/2+panY);ctx.scale(scale,scale);ctx.translate(-800,-500);ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(FarmArt.terrain,0,0,1600,1000);waterAndGrass();
 // Decorative flower fields are part of the landscape, distinct from clickable plots.
 FarmWorld.beds.forEach(b=>{if(!FarmWorld.removed(state,b.uid)&&visible(b.x,b.y,160))bed(b.x,b.y,b.w,b.h,b.color);});
@@ -68,28 +82,52 @@ for(let i=0;i<state.plots.length;i++){
  ctx.fillStyle='#fff7d8';ctx.fillText(text,p.x,badgeY+.5);ctx.restore();
 }
 // Sort tall objects by their ground contact point for consistent overlap.
-const objects=FarmWorld.objects.slice().sort((a,b)=>a.y-b.y);
-for(let i=0;i<objects.length;i++){const o=objects[i];if(FarmWorld.removed(state,o.uid)||!visible(o.x,o.y,Math.max(o.w,o.h)))continue;
- ellipse(o.x+16,o.y-4,o.w*.32,o.w*.11,'#34562f35');const built=!o.building||state.buildings[o.building];
+const objects=FarmWorld.objects.map(o=>{
+ const structure=FarmWorld.structureById[o.id];
+ if(structure){if(!FarmWorld.structureActive(state,o.id))return null;return {...o,...FarmWorld.structurePosition(state,o.id)};}
+ return FarmWorld.removed(state,o.uid)?null:o;
+}).filter(Boolean).sort((a,b)=>a.y-b.y);
+for(let i=0;i<objects.length;i++){const o=objects[i];if(!visible(o.x,o.y,Math.max(o.w,o.h)))continue;
+ const structure=!!FarmWorld.structureById[o.id],buildingKey=structure?o.id:null;
+ const constructing=buildingKey&&state.construction[buildingKey],tearing=buildingKey&&state.demolition[buildingKey];
+ const progress=constructing?Math.min(1,Math.max(0,(Date.now()-constructing.started)/(constructing.ready-constructing.started))):tearing?Math.min(1,Math.max(0,(Date.now()-tearing.started)/(tearing.ready-tearing.started))):1;
+ ellipse(o.x+16,o.y-4,o.w*.32,o.w*.11,'#34562f35');
  const isTree=o.tree!==undefined||o.id==='pine'||o.id==='lilac',isAnimal=o.animal||o.id==='hen';
  const tilt=isTree?sway(i,.011):isAnimal?sway(i,.018):0,bob=isAnimal&&motion?Math.sin(animationTime*.002+i*2)*1.3:0;
  const marked=demolishing&&(selectedTarget===o.uid||hovered===o.uid),normalHover=!demolishing&&hovered===(o.tree!==undefined?'tree-'+o.tree:o.animal||o.building||o.id);
- sprite(o.id,o.x,o.y,o.w,o.h,built?1:.82,marked||normalHover,tilt,bob);
- if(demolishing){const item=FarmWorld.removableById[o.uid];if(item&&marked)label((state.durability[o.uid]??item.maxHP)+' / '+item.maxHP+' ♥',o.x,o.y-o.h-7,{size:11,bg:'#8d543be8'});continue;}
+ if(constructing){
+  ctx.save();ctx.beginPath();ctx.rect(o.x-o.w/2-10,o.y-o.h*progress,o.w+20,o.h*progress+10);ctx.clip();
+  sprite(o.id,o.x,o.y,o.w,o.h,.32+.68*progress,marked||normalHover);
+  ctx.restore();workClouds(o,progress,false);
+ }else if(tearing){
+  ctx.save();ctx.translate(o.x,o.y);ctx.scale(1,1-progress*.82);ctx.translate(-o.x,-o.y);
+  sprite(o.id,o.x,o.y,o.w,o.h,1-progress*.65,marked||normalHover);
+  ctx.restore();workClouds(o,progress,true);
+ }else sprite(o.id,o.x,o.y,o.w,o.h,1,marked||normalHover,tilt,bob);
+ if(demolishing){const item=FarmWorld.removableById[o.uid];if(item&&marked)label(structure?'Разобрать · '+item.name:(state.durability[o.uid]??item.maxHP)+' / '+item.maxHP+' ♥',o.x,o.y-o.h-7,{size:11,bg:'#8d543be8'});continue;}
  if(o.tree!==undefined){if(state.orchard[o.tree]<=Date.now())bubble(o.tree%2?'🍐':'🍎',o.x,o.y-o.h+14);else label(Math.ceil((state.orchard[o.tree]-Date.now())/1000)+' с',o.x,o.y-o.h+12,{size:11,bg:'#5c783cce'});}
- if(o.building){const job=state.jobs[o.building];if(!built)label('Построить',o.x,o.y+7,{bg:'#a0803c',size:12});else if(job)bubble(job.ready<=Date.now()?'✓':'⏳',o.x,o.y-o.h+16);else label(Farm.buildings[o.building].name,o.x,o.y+7,{size:12});}
+ if(structure){
+  if(constructing||tearing)label((tearing?'Разборка':'Стройка')+' · '+Math.ceil(( (tearing||constructing).ready-Date.now())/1000)+' с',o.x,o.y+8,{bg:'#8b6245',size:12});
+  else if(o.building&&state.jobs[o.building])bubble(state.jobs[o.building].ready<=Date.now()?'✓':'⏳',o.x,o.y-o.h+16);
+  else label(Farm.buildings[o.id].name,o.x,o.y+7,{size:12});
+ }
  if(o.animal){const ready=state.animals[o.animal];bubble(ready===null?'♡':ready<=Date.now()?Farm.goods[Farm.animals[o.animal].product].icon:'⏳',o.x,o.y-o.h-10);}}
 // Existing small farm props share the same hand-painted material and lighting.
 
 particles();if(placing&&selectedCell)drawPlacement();}
 function updateControls(){if(!state)return;let items;
- if(demolishing){items=FarmWorld.removables.filter(o=>!FarmWorld.removed(state,o.uid)).map(o=>({key:o.uid,x:o.x,y:o.id==='flowerbed'?o.y:o.y-o.h*.43,w:o.w*.9,h:o.id==='flowerbed'?o.h:o.h*.85,kind:'demolition',id:o.uid,label:'Разобрать: '+o.name}));}
+ if(demolishing){items=FarmWorld.removables.filter(o=>FarmWorld.structureById[o.id]?(FarmWorld.structureActive(state,o.id)&&!state.construction[o.id]&&!state.demolition[o.id]):!FarmWorld.removed(state,o.uid)).map(o=>{
+  const p=FarmWorld.structureById[o.id]?FarmWorld.structurePosition(state,o.id):o;
+  return {key:o.uid,x:p.x,y:o.id==='flowerbed'?p.y:p.y-o.h*.43,w:o.w*.9,h:o.id==='flowerbed'?o.h:o.h*.85,kind:'demolition',id:o.uid,label:'Разобрать: '+o.name};
+ });}
  else{
   items=spots.map((p,i)=>({key:'plot-'+i,x:p.x,y:p.y,w:146,h:73,kind:i<state.plots.length?'plot':'expand',id:i,label:i<state.plots.length?'Грядка '+(i+1)+(state.plots[i]?(state.plots[i].ready<=Date.now()?': собрать ':': растёт ')+Farm.crops[state.plots[i].crop].name:': посадить'): 'Расширить участок'}));
   trees.forEach((t,i)=>{if(!FarmWorld.removed(state,'object-'+i))items.push({key:'tree-'+i,x:t.x,y:t.y-70,w:132,h:145,kind:'tree',id:i,label:(i%2?'Груша':'Яблоня')+(state.orchard[i]<=Date.now()?': собрать фрукты':': растёт')});});
-  if(!FarmWorld.removed(state,FarmWorld.removables.find(o=>o.building==='mill').uid))items.push({key:'mill',x:1080,y:308,w:150,h:170,kind:'workshop',id:'mill',label:'Мельница'});
-  if(!FarmWorld.removed(state,FarmWorld.removables.find(o=>o.building==='bakery').uid))items.push({key:'bakery',x:1260,y:472,w:170,h:160,kind:'workshop',id:'bakery',label:'Пекарня'});
-  if(!FarmWorld.removed(state,FarmWorld.removables.find(o=>o.id==='barn').uid))items.push({key:'barn',x:810,y:220,w:210,h:160,kind:'inventory',id:'barn',label:'Открыть амбар'});
+  for(const id of FarmWorld.structureIds){
+   if(!FarmWorld.structureActive(state,id))continue;
+   const p=FarmWorld.structurePosition(state,id),o=FarmWorld.structureById[id];
+   items.push({key:id,x:p.x,y:p.y-o.h*.43,w:o.w*.75,h:o.h*.7,kind:id==='barn'?'inventory':'workshop',id,label:id==='barn'?'Открыть амбар':Farm.buildings[id].name});
+  }
   items.push({key:'cow',x:1015,y:641,w:132,h:92,kind:'animal',id:'cow',label:'Бурёнка: кормить или собрать молоко'},{key:'hen',x:834,y:683,w:70,h:65,kind:'animal',id:'hen',label:'Курочка: кормить или собрать яйца'});
  }
  const present=new Set(items.map(i=>'map-hit-'+i.key));for(const child of [...controls.children])if(!present.has(child.id))child.remove();
@@ -104,29 +142,31 @@ function release(e){if(placing&&!dragged&&e.type==='pointerup'&&pointers.size===
 viewport.addEventListener('pointerup',release);viewport.addEventListener('pointercancel',release);viewport.addEventListener('click',e=>{if(dragged){e.stopImmediatePropagation();e.preventDefault();}},true);
 viewport.addEventListener('wheel',e=>{e.preventDefault();if(window.FarmPlatform?.paused)return;zoomBy(e.deltaY<0?1.1:1/1.1);},{passive:false});
 function placementInfo(){
- const price=state?FarmWorld.plotPrice(state):100;
- if(!selectedCell)return {active:placing,price,ok:false,reason:'Выбери свободную клетку на карте'};
- const location=FarmWorld.canPlace(state,selectedCell.c,selectedCell.r),affordable=state.coins>=price;
- return {active:placing,validLocation:location.ok,price,c:selectedCell.c,r:selectedCell.r,ok:location.ok&&affordable,reason:!location.ok?location.reason:!affordable?'Место свободно. Не хватает '+(price-state.coins)+' монет':'Место свободно. Можно поставить грядку'};
+ const building=placingBuilding,price=building?Farm.buildings[building].cost:state?FarmWorld.plotPrice(state):100;
+ if(!selectedCell)return {active:placing,building,price,ok:false,reason:'Выбери свободную клетку на карте'};
+ const location=building?FarmWorld.canPlaceBuilding(state,building,selectedCell.c,selectedCell.r):FarmWorld.canPlace(state,selectedCell.c,selectedCell.r),affordable=state.coins>=price;
+ return {active:placing,building,validLocation:location.ok,price,c:selectedCell.c,r:selectedCell.r,ok:location.ok&&affordable,reason:!location.ok?location.reason:!affordable?'Не хватает '+(price-state.coins)+' монет':'Место свободно. Можно строить'};
 }
 function notifyPlacement(){document.dispatchEvent(new CustomEvent('farm-placement-change',{detail:placementInfo()}));}
 function selectAt(event){if(!placing||FarmPlatform.paused)return;const rect=viewport.getBoundingClientRect(),scale=fit*zoom;
  const x=(event.clientX-rect.left-width/2-panX)/scale+800,y=(event.clientY-rect.top-height/2-panY)/scale+500;
  selectedCell=FarmWorld.snap(x,y);dirty=true;notifyPlacement();
 }
-function startPlacement(){if(!loaded)return;placing=true;selectedCell=null;hovered=null;viewport.classList.add('placing');viewport.tabIndex=0;viewport.focus({preventScroll:true});dirty=true;notifyPlacement();}
-function stopPlacement(){placing=false;selectedCell=null;viewport.classList.remove('placing');viewport.removeAttribute('tabindex');dirty=true;notifyPlacement();}
+function startPlacement(building=null){if(!loaded)return;placingBuilding=building;placing=true;selectedCell=null;hovered=null;viewport.classList.add('placing');viewport.tabIndex=0;viewport.focus({preventScroll:true});dirty=true;notifyPlacement();}
+function stopPlacement(){placing=false;placingBuilding=null;selectedCell=null;viewport.classList.remove('placing');viewport.removeAttribute('tabindex');dirty=true;notifyPlacement();}
 function demolitionInfo(){const item=selectedTarget?FarmWorld.removableById[selectedTarget]:null;
- return {active:demolishing,id:item?.uid||null,name:item?.name||null,hp:item?(state?.durability[item.uid]??item.maxHP):0,maxHP:item?.maxHP||0};}
+ return {active:demolishing,id:item?.uid||null,name:item?.name||null,building:!!(item&&FarmWorld.structureById[item.id]),hp:item?(state?.durability[item.uid]??item.maxHP):0,maxHP:item?.maxHP||0};}
 function notifyDemolition(){document.dispatchEvent(new CustomEvent('farm-demolition-change',{detail:demolitionInfo()}));}
 function startDemolition(){if(!loaded)return;demolishing=true;selectedTarget=null;hovered=null;viewport.classList.add('demolishing');dirty=true;updateControls();notifyDemolition();}
 function stopDemolition(){demolishing=false;selectedTarget=null;hovered=null;viewport.classList.remove('demolishing');dirty=true;updateControls();notifyDemolition();}
-function selectDemolition(uid){if(!demolishing||!FarmWorld.removableById[uid]||FarmWorld.removed(state,uid))return;
+function selectDemolition(uid){const item=FarmWorld.removableById[uid];if(!demolishing||!item)return;
+ if(FarmWorld.structureById[item.id]?!FarmWorld.structureActive(state,item.id):FarmWorld.removed(state,uid))return;
  if(selectedTarget===uid){document.dispatchEvent(new CustomEvent('farm-demolition-hit',{detail:{id:uid}}));return;}
  selectedTarget=uid;dirty=true;notifyDemolition();}
-function pulse(uid){const item=FarmWorld.removableById[uid];if(!item)return;if(motion){dust.push({x:item.x,y:item.y,start:animationTime,seed:(dust.length+1)*.76});if(dust.length>12)dust.shift();}dirty=true;}
+function pulse(uid){const item=FarmWorld.removableById[uid];if(!item)return;const p=FarmWorld.structureById[item.id]?FarmWorld.structurePosition(state,item.id):item;if(motion){dust.push({x:p.x,y:p.y,start:animationTime,seed:(dust.length+1)*.76});if(dust.length>12)dust.shift();}dirty=true;}
 function drawPlacement(){const p=FarmWorld.center(selectedCell.c,selectedCell.r),info=placementInfo();ctx.save();
- ctx.globalAlpha=.45;sprite('soil',p.x,p.y+37.5,150,75);ctx.globalAlpha=1;
+ if(info.building){const o=FarmWorld.structureById[info.building];ctx.globalAlpha=.48;sprite(info.building,p.x,p.y,o.w,o.h);ctx.globalAlpha=1;}
+ else{ctx.globalAlpha=.45;sprite('soil',p.x,p.y+37.5,150,75);ctx.globalAlpha=1;}
  diamond(p.x,p.y,150,75,info.validLocation?'#65b94588':'#d94c4c88',info.validLocation?'#e5ffc6':'#ffccc3');
  label(info.validLocation?info.price+' 🪙':'×',p.x,p.y,{bg:info.validLocation?'#416d2eea':'#9b3931ed',size:info.validLocation?12:19});ctx.restore();}
 viewport.addEventListener('keydown',event=>{if(!placing||FarmPlatform.paused)return;
@@ -138,6 +178,6 @@ controls.addEventListener('pointerover',e=>{const button=e.target.closest('.map-
 controls.addEventListener('pointerout',()=>{hovered=null;dirty=true;});
 window.addEventListener('resize',resize);
 const ready=FarmArt.ready.then(()=>{FarmWorld.prepare(FarmArt);loaded=true;dirty=true;draw();});
-window.FarmMap={ready,get placing(){return placing;},get placement(){return placementInfo();},get demolishing(){return demolishing;},get demolition(){return demolitionInfo();},get motion(){return motion;},startPlacement,stopPlacement,startDemolition,stopDemolition,selectDemolition,pulse,setMotion(on){motion=!!on;dust.length=0;try{localStorage.setItem('teplaya-ferma-motion',motion?'on':'off');}catch{}dirty=true;},render(s){state=s;spots=s.plotCells.map(cell=>FarmWorld.center(cell.c,cell.r));if(selectedTarget&&FarmWorld.removed(s,selectedTarget))selectedTarget=null;dirty=true;updateControls();if(placing)notifyPlacement();if(demolishing)notifyDemolition();},zoomBy,reset(){zoom=1;panX=panY=0;clamp();dirty=true;updateControls();}};
+window.FarmMap={ready,get placing(){return placing;},get placement(){return placementInfo();},get demolishing(){return demolishing;},get demolition(){return demolitionInfo();},get motion(){return motion;},startPlacement,stopPlacement,startDemolition,stopDemolition,selectDemolition,pulse,setMotion(on){motion=!!on;dust.length=0;try{localStorage.setItem('teplaya-ferma-motion',motion?'on':'off');}catch{}dirty=true;},render(s){state=s;spots=s.plotCells.map(cell=>FarmWorld.center(cell.c,cell.r));if(selectedTarget){const item=FarmWorld.removableById[selectedTarget];if(item&&(FarmWorld.structureById[item.id]?!FarmWorld.structureActive(s,item.id):FarmWorld.removed(s,selectedTarget)))selectedTarget=null;}dirty=true;updateControls();if(placing)notifyPlacement();if(demolishing)notifyDemolition();},zoomBy,reset(){zoom=1;panX=panY=0;clamp();dirty=true;updateControls();}};
 function loop(t){const paused=window.FarmPlatform?.paused;if(!paused&&(dirty||t-lastTime>=(motion?33:500))){if(motion)animationTime+=Math.min(40,previousFrame?t-previousFrame:33);draw();dirty=false;lastTime=t;}previousFrame=t;requestAnimationFrame(loop);}resize();requestAnimationFrame(loop);
 })();
