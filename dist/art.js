@@ -88,11 +88,12 @@
       [.38,.27],[.54,.20],[.70,.28],[.75,.62],[.75,.88],
       [.88,.98],[.10,.98],[.22,.91],[.27,.63]
     ]]);
-    frames.millSails = maskedSprite(mill, [
-      [[.43,.38],[.34,.32],[.04,.04],[.13,.00],[.51,.34]],
-      [[.46,.37],[.51,.30],[.87,.04],[.97,.13],[.54,.44]],
-      [[.44,.41],[.36,.47],[.00,.63],[.10,.71],[.50,.45]],
-      [[.46,.41],[.53,.38],[.80,.75],[.70,.80],[.40,.44]]
+    // Take just ONE intact painted sail from the top-left of the source.
+    // The other three are copies rotated around the axle. The right-hand
+    // source blades overlap the red roof, so cropping all four was pulling
+    // fragments of the roof into the rotor and visibly breaking the art.
+    frames.millSail = maskedSprite(mill, [
+      [[.055,.105],[.205,.005],[.49,.345],[.43,.415]]
     ]);
   }
   let terrain;

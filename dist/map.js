@@ -14,13 +14,17 @@ function visible(x,y,pad=120){const scale=fit*zoom,sx=width/2+panX+(x-800)*scale
 function sway(i,amount=.013){return motion?Math.sin(animationTime*.00095+i*2.37)*amount+Math.sin(animationTime*.00147+i*3.1)*amount*.26:0;}
 function animatedMill(o,highlight){
  sprite('millTower',o.x,o.y,o.w,o.h,1,highlight);
- const rotor=FarmArt.frames.millSails;if(!rotor)return;
+ const sail=FarmArt.frames.millSail;if(!sail)return;
  // Pivot is the exact axle of the original artwork. The original four painted
  // sails rotate as one layer; no full-screen or per-frame image processing.
  const hubX=o.x-o.w*.055,hubY=o.y-o.h*.615;
  const active=!!state.jobs.mill,angle=motion?animationTime*(active ? .00064 : .00034):0;
  ctx.save();ctx.translate(hubX,hubY);ctx.rotate(angle);
- ctx.drawImage(rotor,-o.w*.445,-o.h*.385,o.w,o.h);
+ for(let blade=0;blade<4;blade++){
+  ctx.save();ctx.rotate(blade*Math.PI/2);
+  ctx.drawImage(sail,-o.w*.445,-o.h*.385,o.w,o.h);
+  ctx.restore();
+ }
  ctx.restore();
  ellipse(hubX,hubY,7.5,7.5,'#8a522b');ellipse(hubX-1,hubY-1,3.2,3.2,'#d49a52');
  if(motion&&active){for(let n=0;n<3;n++){const t=(animationTime*.001+n/3)%1;ellipse(o.x-o.w*.12+t*18,o.y-12-t*20,1.8,1.3,'rgba(247,218,150,'+(0.5*(1-t))+')');}}
@@ -54,10 +58,15 @@ function animalPose(o,i){
  return {x:o.x+Math.sin(cycle*.86)*3.3,tilt:Math.sin(cycle*.7)*.028-peck,bob:-hop,breath:Math.sin(cycle*2.1)*.014};
 }
 function cowTail(o,i){if(!motion||o.id!=='cow')return;
- const t=Math.sin(animationTime*.005+i),x=o.x-o.w*.38,y=o.y-o.h*.46;
- ctx.save();ctx.strokeStyle='#51483c';ctx.lineWidth=3;ctx.lineCap='round';
- ctx.beginPath();ctx.moveTo(x,y);ctx.quadraticCurveTo(x-13+t*7,y+12,x-10+t*11,y+30);ctx.stroke();
- ellipse(x-10+t*11,y+31,4,7,'#34352d');ctx.restore();
+ // Attach to the rump near the source sprite's real tail, then keep the
+ // movement small so the animated tuft merges with the painted tail.
+ const swing=Math.sin(animationTime*.004+i*1.7)*4;
+ const rootX=o.x-o.w*.375,rootY=o.y-o.h*.77;
+ const tipX=o.x-o.w*.47+swing,tipY=o.y-o.h*.30;
+ ctx.save();ctx.strokeStyle='#51483c';ctx.lineWidth=3.2;ctx.lineCap='round';
+ ctx.beginPath();ctx.moveTo(rootX,rootY);
+ ctx.bezierCurveTo(rootX-14,rootY+19,tipX-7,tipY-15,tipX,tipY);ctx.stroke();
+ ellipse(tipX,tipY+2,3.6,6.5,'#34352d');ctx.restore();
 }
 function waterAndGrass(){if(!motion)return;
  ctx.save();ctx.beginPath();ctx.moveTo(1600,650);ctx.lineTo(1472,650);ctx.lineTo(1393,674);ctx.lineTo(1320,690);ctx.lineTo(1265,746);ctx.lineTo(1272,818);ctx.lineTo(1340,901);ctx.lineTo(1430,954);ctx.lineTo(1600,995);ctx.closePath();ctx.clip();
